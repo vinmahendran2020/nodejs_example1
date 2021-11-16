@@ -1,0 +1,15 @@
+service: IndividualRemint
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: dev
+  timeout: 20
+
+functions:
+  individualRemint:
+    handler: index.handler
+    environment:
+      userRemintQueue: https://sqs.us-east-1.amazonaws.com/517553746427/UserRemint.fifo	
+      
+

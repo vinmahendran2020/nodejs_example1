@@ -1,0 +1,12 @@
+version: 0.0
+os: linux
+
+files:
+  - source: /
+    destination: /opt/whitney-ethereum-service
+
+hooks:
+  ApplicationStart:
+    - location: scripts/start_service.sh
+  BeforeInstall:
+    - location: scripts/stop_service.sh

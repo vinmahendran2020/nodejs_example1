@@ -1,0 +1,34 @@
+{
+  "name": "whitney-eth-service",
+  "version": "1.0.0",
+  "description": "Library to interact with EVM based networks",
+  "main": "index.js",
+  "scripts": {
+    "test": " NODE_ENV=test LOG=fatal nyc mocha --exit",
+    "posttest": "nyc report --reporter=html",
+    "prestart": "npm install",
+    "start": "node API/RestApi.js"
+  },
+  "keywords": [
+    "swagger"
+  ],
+  "license": "Unlicense",
+  "private": true,
+  "dependencies": {
+    "aws-sdk": "^2.610.0",
+    "chai": "^4.2.0",
+    "connect": "^3.2.0",
+    "connect-timeout": "^1.9.0",
+    "express": "^4.17.1",
+    "log4js": "^6.1.0",
+    "mocha": "^6.2.2",
+    "nyc": "^14.1.1",
+    "request": "^2.88.2",
+    "web3": "^1.2.4"
+  },
+  "devDependencies": {
+    "chai-http": "^4.3.0",
+    "ganache-core": "^2.9.2",
+    "sleep": "^6.1.0"
+  }
+}

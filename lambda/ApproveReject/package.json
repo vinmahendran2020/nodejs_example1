@@ -1,0 +1,24 @@
+{
+  "name": "approveReject",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "nyc mocha --reporter spec",
+    "deploy": "npm run clean && npm install --production && npm run build",
+    "clean": "rm -rf node_modules",
+    "build": "zip -r build.zip index.js src node_modules"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.19.0",
+    "https": "^1.0.0"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.585.0",
+    "chai": "^4.2.0",
+    "mocha": "^6.2.2",
+    "nyc": "^14.1.1"
+  }
+}

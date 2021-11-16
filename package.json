@@ -1,0 +1,19 @@
+{
+  "name": "ethereum-service",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "generate-docs": "redoc-cli bundle openAPIDocumentation.json --output openAPIDocumentation.html",
+    "test": "nyc mocha ./test/api.test.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "redoc": "^2.0.0-rc.20",
+    "redoc-cli": "^0.9.4"
+  },
+  "devDependencies": {
+    "chai-http": "^4.3.0",
+    "chai-subset": "^1.6.0"
+  }
+}

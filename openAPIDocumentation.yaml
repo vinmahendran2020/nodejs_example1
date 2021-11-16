@@ -1,0 +1,418 @@
+openapi: 3.0.0
+info:
+  description: API endpoints for Whitney-Ethereum-Service operations required to interact with a whitneyToken. These endpoints are all called internally. For developer use only.
+  version: 1.0.0
+  title: Whitney-Ethereum-Service
+paths:
+  /mintSecurity:
+    post:
+      summary: creates a new security
+      operationId: mintSecurity
+      description: |-
+        Context: Minting process deploys the address deterministically based on the TSIN provided, when the transaction is confirmed a batchmint transaction is sent crediting the specified address with the amounts. As a response we provide both transactions and the address of the new security. 
+         Possible errors:  
+         1. Addresses need to be valid Eth addresses 
+         2. Several securities with the same TSIN can't be deployed, the transaction will revert 
+         3. Timeouts may occur if the fees suddenly increase, the transactions will probably still be sent 
+         4. Nonce can desync, you can force custom nonces by adding the nonce param to the body IE: `'nonce': 8` 
+         5. Out of gas error: if the gas is miscalculated or the EVM estimated a failure before reaching the node 
+         6. Transaction reverted might happen in edge cases best way to find the solution is to analyze the receipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tsin:
+                  type: string
+                  example: T3351N67
+                records:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/record'
+                  example:
+                    - address: '0x33be5519c4018D0d4ad242110A40eBAF0C695403'
+                      tokens: 100
+                    - address: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1'
+                      tokens: 100
+                    - address: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1'
+                      tokens: 100
+      responses:
+        '200':
+          description: Successfully added 1 security(ies)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/mintSecurityResponse'
+  /call:
+    post:
+      summary: calls a function on the blockchain
+      operationId: call
+      description: calls a function on the blockchain
+      requestBody:
+        description: 'the function to call, any additional parameters the function needs, as well as the contract name and address'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/callBody'
+      responses:
+        '200':
+          description: result of called function
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: integer
+                    example: 200
+  /sendSignedTransaction:
+    post:
+      summary: sends signed transaction
+      operationId: sendSignedTransaction
+      description: sends a signed transaction
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/callBody'
+      responses:
+        '200':
+          description: transaction hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  txHash:
+                    type: string
+                    example: '0xd2a2ed484468b291e67d14b1a48b1512a1d91556238f3652ae07703a65dbbc51'
+  /confirmTransaction:
+    post:
+      summary: confirm a transaction
+      operationId: confirmTransaction
+      description: confirm a transaction given the transaction id and contract address
+      requestBody:
+        description: transaction id and the contract address of the transaction
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/confirmOrRejectTx'
+      responses:
+        '200':
+          description: transaction hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  txHash:
+                    type: string
+                    example: '0xd2a2ed484468b291e67d14b1a48b1512a1d91556238f3652ae07703a65dbbc51'
+  /rejectTransaction:
+    post:
+      summary: reject a transaction
+      operationId: rejectTransaction
+      description: reject a transaction given the transaction id and contract address
+      requestBody:
+        description: transaction id and the contract address of the transaction
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/confirmOrRejectTx'
+      responses:
+        '200':
+          description: transaction hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  txHash:
+                    type: string
+                    example: '0xd2a2ed484468b291e67d14b1a48b1512a1d91556238f3652ae07703a65dbbc51'
+  /changeOwner:
+    post:
+      summary: change owner of a contract
+      operationId: changeOwner
+      description: change owner
+      requestBody:
+        description: the contract address of the transaction and the address of the new owner
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newOwner:
+                  type: string
+                  example: '0x33be5519c4018d0d4ad242110a40ebaf0c695403'
+                contractAddress:
+                  type: string
+                  example: '0xa15da0943b91f5dece3261f82373352d01c85cdc'
+      responses:
+        '200':
+          description: transaction hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  txHash:
+                    type: string
+                    example: '0xd2a2ed484468b291e67d14b1a48b1512a1d91556238f3652ae07703a65dbbc51'
+  /pause:
+    post:
+      summary: pause a transaction
+      operationId: pause
+      description: pause a transaction
+      requestBody:
+        description: the contract address of the transaction to pause
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contractAddress:
+                  type: string
+                  example: '0xa15da0943b91f5dece3261f82373352d01c85cdc'
+      responses:
+        '200':
+          description: transaction hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  txHash:
+                    type: string
+                    example: '0xd2a2ed484468b291e67d14b1a48b1512a1d91556238f3652ae07703a65dbbc51'
+  /unPause:
+    post:
+      summary: unpause a transaction
+      operationId: unpause
+      description: unpause a transaction
+      requestBody:
+        description: the contract address of the transaction to unpause
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contractAddress:
+                  type: string
+                  example: '0xa15da0943b91f5dece3261f82373352d01c85cdc'
+      responses:
+        '200':
+          description: transaction hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  txHash:
+                    type: string
+                    example: '0xd2a2ed484468b291e67d14b1a48b1512a1d91556238f3652ae07703a65dbbc51'
+  /destroy:
+    post:
+      summary: destroy a transaction
+      operationId: destroy
+      description: destroy a transaction
+      requestBody:
+        description: the contract address of the transaction to destroy
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contractAddress:
+                  type: string
+                  example: '0x9b9051604dbad94b186e58e43e019da50bd4c0df'
+      responses:
+        '200':
+          description: transaction hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  txHash:
+                    type: string
+                    example: '0x00d9db645693b56cd40707361a00735bda79a1c23cdc958f62068854d441b3ea'
+  /getTxInfo:
+    post:
+      summary: get transaction information
+      operationId: getTxInfo
+      description: get transaction information
+      requestBody:
+        description: the contract address and the transaction id of the transaction
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                txId:
+                  type: integer
+                  example: 1
+                contractAddress:
+                  type: string
+                  example: '0xa2f159588efe7380f2c525bdff75e04d70363112'
+      responses:
+        '200':
+          description: |+
+            transaction info: 
+
+             0 = sender 
+
+             1 = reciever 
+
+             2 = amount 
+
+             3 = state of transaction where 0 is unconfirmed, 1 is confirmed, 2 is rejected 
+
+             4 = balance of sender 
+
+             5 = balance of reciever 
+
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/getTxInfo'
+  /addAddresses:
+    post:
+      summary: 'store investor ethereum addresses. Note: this is a lambda, not a true endpoint'
+      operationId: addAddresses
+      description: stores addresses of investors
+      requestBody:
+        description: investor ids and ethereum addresses
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                addresses:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/addresses'
+              example:
+                addresses:
+                  - uniqueInvestorID: '10000001'
+                    address: '0xcd2a3d9f938e13cd947ec05abc7fe734df8dd826'
+                  - uniqueInvestorID: '10000002'
+                    address: '0x746Ac4553191cCC706097b974A3cB03fed360A69'
+      responses:
+        '200':
+          description: Successfully added (2) address(es)
+          content:
+            application/json:
+              schema:
+                type: string
+                example: Successfully added (2) address(es)
+components:
+  schemas:
+    record:
+      type: object
+      properties:
+        address:
+          type: string
+          example: '0x33be5519c4018D0d4ad242110A40eBAF0C695403'
+        tokens:
+          type: integer
+          example: 100
+    addresses:
+      type: object
+      properties:
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/address'
+    address:
+      type: object
+      properties:
+        uniqueInvestorID:
+          type: string
+          example: '10000001'
+        address:
+          type: string
+          example: '0xcd2a3d9f938e13cd947ec05abc7fe734df8dd826'
+    mintSecurityResponse:
+      type: object
+      properties:
+        batchMintTransaction:
+          type: string
+          example: '0x972d435a24b4be908bc44b60a424bcd87f947522cde951444dee31c919bad251'
+        newSecurity:
+          type: object
+          properties:
+            deploymentAddress:
+              type: string
+              example: '0xb6f08357a05b0ba1d51f279386ddbe1182a3554e'
+            deploymentTransaction:
+              type: string
+              example: '0xffa56ced2b7d214e4ec289b84037c2179bce0a3a8afb16687899a3f994913fda'
+    callBody:
+      type: object
+      properties:
+        function:
+          example: balanceOf
+          type: string
+        params:
+          type: array
+          items:
+            oneOf:
+              - type: string
+                example: anyAdditionalParamsAsRequiredByFunction
+              - type: integer
+                example: 1
+              - type: string
+                example: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1'
+        contractName:
+          type: string
+          example: WhitneyToken
+        contractAddress:
+          type: string
+          example: '0x8d42ac89d08069c83cf029e432b78dbc223be0e2'
+    confirmOrRejectTx:
+      type: object
+      properties:
+        txId:
+          type: integer
+          example: 0
+        contractAddress:
+          type: string
+          example: '0xa15da0943b91f5dece3261f82373352d01c85cdc'
+    getTxInfo:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            '0':
+              type: string
+              example: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1'
+            '1':
+              type: string
+              example: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1'
+            '2':
+              type: string
+              example: '5'
+            '3':
+              type: string
+              example: '0'
+            '4':
+              type: string
+              example: '195'
+            '5':
+              type: string
+              example: '195'

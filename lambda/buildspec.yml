@@ -1,0 +1,72 @@
+version: 0.2 
+env: 
+  variables: 
+    HOST: "host" 
+    USER: "user" 
+    PASS: "pass" 
+ 
+phases: 
+  install: 
+    commands: 
+    - cd lambda/Mint 
+    - npm install --silent --no-progress 
+    - cd ../ReMint 
+    - npm install --silent --no-progress
+    - cd ../ApproveReject 
+    - npm install --silent --no-progress 
+    - cd ../Explorer 
+    - npm install --silent --no-progress
+    - cd ../RemintQueue 
+    - npm install --silent --no-progress 
+
+  pre_build: 
+    commands: 
+    - cd ../..
+    # - npm install
+    # - npm run generate-docs
+    - cd lambda
+    - export DEBIAN_FRONTEND=noninteractive 
+    - cd Mint 
+    - npm test
+    - cd ../ReMint 
+    - npm test
+    - cd ../Explorer 
+    - npm test
+    - cd ../RemintQueue 
+    - npm test
+
+  build: 
+    commands: 
+    - npm run deploy
+    - cd ../Explorer
+    - npm run deploy
+    - cd ../ReMint
+    - npm run deploy
+    - cd ../Mint
+    - npm run deploy
+    - cd ../ApproveReject
+    - npm run deploy
+
+
+  post_build: 
+    commands: 
+    - cd .. 
+    - aws lambda update-function-code --function-name EthereumMint --zip-file fileb://Mint/build.zip 
+    - aws lambda update-function-code --function-name EthereumReMint --zip-file fileb://ReMint/build.zip 
+    - aws lambda update-function-code --function-name EthereumApproveReject --zip-file fileb://ApproveReject/build.zip 
+    - aws lambda update-function-code --function-name Explorer --zip-file fileb://Explorer/build.zip 
+    - aws lambda update-function-code --function-name EthereumIndividualRemint --zip-file fileb://RemintQueue/build.zip 
+    - version2=$(aws lambda publish-version --function-name EthereumMint --output text --query 'Version')
+    - version3=$(aws lambda publish-version --function-name EthereumReMint --output text --query 'Version')
+    - version4=$(aws lambda publish-version --function-name EthereumApproveReject --output text --query 'Version')
+    - version5=$(aws lambda publish-version --function-name Explorer --output text --query 'Version')
+    - version8=$(aws lambda publish-version --function-name EthereumIndividualRemint --output text --query 'Version')
+    - aws lambda update-alias --function-name EthereumMint --name ConcurrentAlias --function-version $version2
+    - aws lambda update-alias --function-name EthereumReMint --name ConcurrentAlias --function-version $version3
+    - aws lambda update-alias --function-name EthereumApproveReject --name ConcurrentAlias --function-version $version4
+    - aws lambda update-alias --function-name Explorer --name ConcurrentAlias --function-version $version5
+    - aws lambda update-alias --function-name EthereumIndividualRemint --name ConcurrentAlias --function-version $version8
+
+artifacts:
+  files:
+    - openAPIDocumentation.html

@@ -1,0 +1,359 @@
+#######################################################################################
+#   Project Whitney - whitney-service-etherium
+# 
+####################################################################################### 
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS CloudFormation Lambdas, RDS, Role & SQS for whitney-explorer
+Parameters:
+  NetworkStackName:
+    Type: String
+    Description: Select the Stack with exports
+    Default: A-whitney-initial-infra
+  MasterUserName:
+    Type: String
+    Description: The RDS Aurora Serverless Master UserName
+    Default: ministrator
+  MasterUserPassword:
+    Type: String
+    Description: The RDS Aurora Serverless Master User Password
+    NoEcho: True
+    Default: gY{v9oarC]sP
+  ServiceDBName: 
+    Type: String
+    Description: Service DB's name
+    Default: whitneyservicedb
+  DBSubnetGroupName: 
+    Type: String
+    Description: DB subnet group
+    Default: whitneydbsubnetgroup
+  GethNodeStackName:
+    Type: String
+    Description: Select the Geth node stack with exports
+    Default: test
+  EC2EthereumExpressStackName:
+    Type: String
+    Description: Stack name where Express is running (post 8032, 8033)
+    Default: whitney-ec2-ethereum-deployment
+  WhitneyCommonServiceStackName:
+    Type: String
+    Description: Stack name where Express is running (post 8032, 8033)
+    Default: whitney-common-service
+  ConcurrentAliasName:
+    Type: String
+    Description: The default name of the alias having provision concurrency
+    Default: ConcurrentAlias
+
+Resources:  
+  EthereumErrors: 
+    Type: AWS::SQS::Queue 
+    Properties:  
+        ContentBasedDeduplication: False
+        DelaySeconds: 0 
+        FifoQueue: True 
+        KmsDataKeyReusePeriodSeconds: 300 
+        MessageRetentionPeriod: 345600 
+        QueueName: EthereumErrors.fifo 
+        ReceiveMessageWaitTimeSeconds: 0 
+        Tags:  
+            - Key: Name 
+              Value: "EthereumErrors" 
+            - Key: Project 
+              Value: "Whitney" 
+        VisibilityTimeout: 1200 
+        KmsMasterKeyId: 'alias/aws/sqs'
+         
+  ExplorerLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties: 
+        Environment:
+            Variables:
+                ALIAS: ''
+                CONTRACT_QUEUE: !Sub "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/MintReconQueue.fifo"
+                DB_HOST:
+                  Fn::ImportValue: !Sub ${WhitneyCommonServiceStackName}-RDSEndpoint
+                DB_NAME: !Ref ServiceDBName
+                DB_USER: !Ref MasterUserName
+                DB_PASSWORD: !Ref MasterUserPassword
+                ERROR_QUEUE: !Ref EthereumErrors
+                ETH_SERVICE: !Join
+                  - ''
+                  - - 'http://'
+                    - Fn::ImportValue: !Sub ${EC2EthereumExpressStackName}-PrivateIp
+                    - ':8032'
+                TRANSFER_QUEUE: !Sub "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/TransferQueue.fifo"
+                TRANSFER_RECON_QUEUE: !Sub "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/TransferReconQueue.fifo"
+        Handler: index.handler
+        Role: 
+          Fn::ImportValue: !Sub ${WhitneyCommonServiceStackName}-WhitneyLambdaToSQSAndRDSARN
+        Code:
+            ZipFile: |
+                exports.handler = function(event, context, callback) {
+                    callback(null,"Success");
+                };
+        FunctionName: Explorer
+        MemorySize: 1280
+        Runtime: nodejs12.x
+        Timeout: 5
+        TracingConfig:
+            Mode: Active
+        VpcConfig:
+            SecurityGroupIds:
+                - Fn::ImportValue: !Sub "${NetworkStackName}-WhitneyDBSecurityGroup"
+                - Fn::ImportValue: !Sub "${NetworkStackName}-WhitneyNodeSecurityGroup"
+            SubnetIds: 
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetAPrivate
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetBPrivate
+          
+  ExplorerFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties: 
+      FunctionName: !Ref ExplorerLambdaFunction
+      Description: v1
+    DependsOn: ExplorerLambdaFunction
+  ExplorerFunctionAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      Description: "Concurrent provisionning"
+      FunctionName: !Ref ExplorerLambdaFunction
+      FunctionVersion: !GetAtt ExplorerFunctionVersion.Version
+      Name: !Ref ConcurrentAliasName
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 10
+  
+  EthereumApproveRejectLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties: 
+        Environment:
+            Variables:
+                ETH_SERVICE: !Join
+                  - ''
+                  - - 'http://'
+                    - Fn::ImportValue: !Sub ${EC2EthereumExpressStackName}-PrivateIp
+                    - ':8032'
+        Handler: index.handler
+        Role: 
+          Fn::ImportValue: !Sub ${WhitneyCommonServiceStackName}-WhitneyLambdaToSQSAndRDSARN
+        Code:
+            ZipFile: |
+                exports.handler = function(event, context, callback) {
+                    callback(null,"Success");
+                };
+        FunctionName: EthereumApproveReject
+        MemorySize: 1280
+        Runtime: nodejs12.x
+        Timeout: 900
+        TracingConfig:
+            Mode: Active
+        VpcConfig:
+            SecurityGroupIds:
+                - Fn::ImportValue: !Sub "${NetworkStackName}-WhitneyNodeSecurityGroup"
+            SubnetIds: 
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetAPrivate
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetBPrivate
+                
+  EthereumApproveRejectFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties: 
+      FunctionName: !Ref EthereumApproveRejectLambdaFunction
+      Description: v1
+    DependsOn: EthereumApproveRejectLambdaFunction
+  EthereumApproveRejectFunctionAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      Description: "Concurrent provisionning alias"
+      FunctionName: !Ref EthereumApproveRejectLambdaFunction
+      FunctionVersion: !GetAtt EthereumApproveRejectFunctionVersion.Version
+      Name: !Ref ConcurrentAliasName
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 10
+                    
+  EthereumMintLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties: 
+        Environment:
+            Variables:
+                DB_HOST: 
+                  Fn::ImportValue: !Sub ${WhitneyCommonServiceStackName}-RDSEndpoint
+                DB_NAME: !Ref ServiceDBName
+                DB_USER: !Ref MasterUserName
+                DB_PASSWORD: !Ref MasterUserPassword
+                ERROR_QUEUE_URL: !Ref EthereumErrors
+                ETH_SERVICE: !Join
+                  - ''
+                  - - 'http://'
+                    - Fn::ImportValue: !Sub ${EC2EthereumExpressStackName}-PrivateIp
+                    - ':8032'
+        Handler: index.handler
+        Role: 
+          Fn::ImportValue: !Sub ${WhitneyCommonServiceStackName}-WhitneyLambdaToSQSAndRDSARN
+        Code:
+            ZipFile: |
+                exports.handler = function(event, context, callback) {
+                    callback(null,"Success");
+                };
+        FunctionName: EthereumMint
+        MemorySize: 1280
+        Runtime: nodejs12.x
+        Timeout: 900 
+        TracingConfig:
+            Mode: Active
+        VpcConfig:
+            SecurityGroupIds:
+                - Fn::ImportValue: !Sub "${NetworkStackName}-WhitneyDBSecurityGroup"
+                - Fn::ImportValue: !Sub "${NetworkStackName}-WhitneyNodeSecurityGroup"
+            SubnetIds: 
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetAPrivate
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetBPrivate
+  EthereumMintFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties: 
+      FunctionName: !Ref EthereumMintLambdaFunction
+      Description: v1
+    DependsOn: EthereumMintLambdaFunction
+  EthereumMintFunctionAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      Description: "Concurrent provisionning alias"
+      FunctionName: !Ref EthereumMintLambdaFunction
+      FunctionVersion: !GetAtt EthereumMintFunctionVersion.Version
+      Name: !Ref ConcurrentAliasName
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 10
+                    
+  EthereumReMintLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties: 
+        Environment:
+            Variables:
+                ALIAS: ''
+                DB_HOST: 
+                  Fn::ImportValue: !Sub ${WhitneyCommonServiceStackName}-RDSEndpoint
+                DB_NAME: !Ref ServiceDBName
+                DB_USER: !Ref MasterUserName
+                DB_PASSWORD: !Ref MasterUserPassword
+                ERROR_QUEUE_URL: !Ref EthereumErrors
+                ETH_SERVICE: !Join
+                  - ''
+                  - - 'https://'
+                    - Fn::ImportValue: !Sub ${EC2EthereumExpressStackName}-PrivateIp
+                    - ':8033'
+        Handler: index.handler
+        Role: 
+          Fn::ImportValue: !Sub ${WhitneyCommonServiceStackName}-WhitneyLambdaToSQSAndRDSARN
+        Code:
+            ZipFile: |
+                exports.handler = function(event, context, callback) {
+                    callback(null,"Success");
+                };
+        FunctionName: EthereumReMint
+        MemorySize: 1280
+        Runtime: nodejs12.x
+        Timeout: 900 
+        TracingConfig:
+            Mode: Active
+        VpcConfig:
+            SecurityGroupIds:
+                - Fn::ImportValue: !Sub "${NetworkStackName}-WhitneyDBSecurityGroup"
+            SubnetIds: 
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetAPrivate
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetBPrivate
+  EthereumReMintFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties: 
+      FunctionName: !Ref EthereumReMintLambdaFunction
+      Description: v1
+    DependsOn: EthereumReMintLambdaFunction
+  EthereumReMintFunctionAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      Description: "Concurrent provisionning alias"
+      FunctionName: !Ref EthereumReMintLambdaFunction
+      FunctionVersion: !GetAtt EthereumReMintFunctionVersion.Version
+      Name: !Ref ConcurrentAliasName
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 10
+
+
+  EthereumIndividualRemintLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties: 
+        Environment:
+            Variables:
+                ALIAS: ''
+                ADDRESS_SALT: '1'
+                ETH_SERVICE: !Join
+                  - ''
+                  - - 'https://'
+                    - Fn::ImportValue: !Sub ${EC2EthereumExpressStackName}-PrivateIp
+                    - ':8033'
+                INDIVIDUAL_REMINT_PATH: '/remint'
+        Handler: index.handler
+        Role: 
+          Fn::ImportValue: !Sub ${WhitneyCommonServiceStackName}-WhitneyLambdaToSQSAndRDSARN
+        Code:
+            ZipFile: |
+                exports.handler = function(event, context, callback) {
+                    callback(null,"Success");
+                };
+        FunctionName: EthereumIndividualRemint
+        MemorySize: 1280
+        Runtime: nodejs12.x
+        Timeout: 900 
+        TracingConfig:
+            Mode: Active
+        VpcConfig:
+            SecurityGroupIds:
+                - Fn::ImportValue: !Sub "${NetworkStackName}-WhitneyDBSecurityGroup"
+            SubnetIds: 
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetAPrivate
+                - Fn::ImportValue: !Sub ${NetworkStackName}-SubnetBPrivate
+  EthereumIndividualRemintFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties: 
+      FunctionName: !Ref EthereumIndividualRemintLambdaFunction
+      Description: v1
+  EthereumIndividualRemintFunctionAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      Description: "Concurrent provisionning alias"
+      FunctionName: !Ref EthereumIndividualRemintLambdaFunction
+      FunctionVersion: !GetAtt EthereumIndividualRemintFunctionVersion.Version
+      Name: !Ref ConcurrentAliasName
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 10
+  # ************************************************************************
+  # ************* EVENT SOURCE MAPPING SQS TO LAMBDA FUNCTIONS *************
+  # ************************************************************************
+    
+  # EthereumApproveRejectEventSourceMapping:
+  #   Type: AWS::Lambda::EventSourceMapping
+  #   Properties:
+  #       BatchSize: 1
+  #       Enabled: true
+  #       EventSourceArn: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:ConfirmationQueue.fifo"
+  #       FunctionName: !GetAtt EthereumApproveRejectLambdaFunction.Arn
+          
+  # EthereumMintEventSourceMapping:
+  #   Type: AWS::Lambda::EventSourceMapping
+  #   Properties:
+  #       BatchSize: 1
+  #       Enabled: true
+  #       EventSourceArn: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:MintTokenQueue.fifo"
+  #       FunctionName: !GetAtt EthereumMintLambdaFunction.Arn
+         
+  EthereumReMintEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+        BatchSize: 1
+        Enabled: true
+        EventSourceArn: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:TokenRemintQueue.fifo"
+        FunctionName: !Ref EthereumReMintFunctionAlias
+
+  EthereumReMintQueueEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+        BatchSize: 1
+        Enabled: true
+        EventSourceArn: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:RemintQueue.fifo"
+        FunctionName: !Ref EthereumIndividualRemintFunctionAlias
